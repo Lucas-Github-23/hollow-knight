@@ -9,17 +9,20 @@
         #drop-zone { border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer; }
         #editor { width: 100%; height: 200px; margin-top: 10px; }
         .hidden { display: none; }
+        #error-msg { color: red; }
     </style>
 </head>
 <body>
 
     <h2>Editor de Arquivos DAT</h2>
-    
+
     <div id="drop-zone">Arraste um arquivo aqui ou <button onclick="document.getElementById('file-input').click()">Selecione um arquivo</button></div>
     <input type="file" id="file-input" class="hidden">
+    
+    <p id="error-msg" class="hidden">Erro ao carregar o arquivo!</p>
 
     <textarea id="editor" class="hidden"></textarea>
-    
+
     <button id="download-decodificado" class="hidden">Baixar como Texto</button>
     <button id="download-codificado" class="hidden">Baixar como DAT</button>
 
@@ -32,12 +35,18 @@
         const editor = document.getElementById("editor");
         const downloadDecodificado = document.getElementById("download-decodificado");
         const downloadCodificado = document.getElementById("download-codificado");
+        const errorMsg = document.getElementById("error-msg");
         const historyList = document.getElementById("history-list");
 
         let fileName = "";
 
         function decodeFile(data) {
-            return new TextDecoder().decode(data); // Simula a decodificação
+            try {
+                return new TextDecoder().decode(data); // Simula a decodificação
+            } catch (error) {
+                console.error("Erro ao decodificar:", error);
+                return null;
+            }
         }
 
         function encodeFile(json) {
@@ -45,21 +54,34 @@
         }
 
         function handleFile(file) {
+            if (!file) return;
+
             fileName = file.name;
             const reader = new FileReader();
-            
+
             reader.onload = function(event) {
                 try {
-                    const decoded = decodeFile(event.target.result);
+                    const result = event.target.result;
+                    const decoded = decodeFile(new Uint8Array(result));
+
+                    if (!decoded) {
+                        throw new Error("Falha ao processar o arquivo.");
+                    }
+
                     const formattedJson = JSON.stringify(JSON.parse(decoded), null, 2);
                     editor.value = formattedJson;
                     editor.classList.remove("hidden");
                     downloadDecodificado.classList.remove("hidden");
                     downloadCodificado.classList.remove("hidden");
+                    errorMsg.classList.add("hidden");
 
                     saveToHistory(formattedJson, fileName);
                 } catch (error) {
-                    alert("Erro ao decodificar o arquivo.");
+                    console.error("Erro ao processar o arquivo:", error);
+                    errorMsg.classList.remove("hidden");
+                    editor.classList.add("hidden");
+                    downloadDecodificado.classList.add("hidden");
+                    downloadCodificado.classList.add("hidden");
                 }
             };
 
