@@ -14,7 +14,7 @@
 </head>
 <body>
 
-    <h2>Editor de Arquivos DAT</h2>
+    <h2>Editor de Arquivos DAT ver.2</h2>
 
     <div id="drop-zone">Arraste um arquivo aqui ou <button onclick="document.getElementById('file-input').click()">Selecione um arquivo</button></div>
     <input type="file" id="file-input" class="hidden">
@@ -23,34 +23,36 @@
 
     <textarea id="editor" class="hidden"></textarea>
 
-    <button id="download-decodificado" class="hidden">Baixar como Texto</button>
-    <button id="download-codificado" class="hidden">Baixar como DAT</button>
-
-    <h3>Histórico</h3>
-    <ul id="history-list"></ul>
+    <button id="download-decoded" class="hidden">Baixar como Texto</button>
+    <button id="download-encoded" class="hidden">Baixar como DAT</button>
 
     <script>
         const fileInput = document.getElementById("file-input");
         const dropZone = document.getElementById("drop-zone");
         const editor = document.getElementById("editor");
-        const downloadDecodificado = document.getElementById("download-decodificado");
-        const downloadCodificado = document.getElementById("download-codificado");
+        const downloadDecoded = document.getElementById("download-decoded");
+        const downloadEncoded = document.getElementById("download-encoded");
         const errorMsg = document.getElementById("error-msg");
-        const historyList = document.getElementById("history-list");
 
         let fileName = "";
+        let binaryData = null;
 
-        function decodeFile(data) {
-            try {
-                return new TextDecoder().decode(data); // Simula a decodificação
-            } catch (error) {
-                console.error("Erro ao decodificar:", error);
-                return null;
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            let bytes = new Uint8Array(buffer);
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
             }
+            return btoa(binary);
         }
 
-        function encodeFile(json) {
-            return new TextEncoder().encode(json); // Simula a codificação
+        function base64ToArrayBuffer(base64) {
+            let binary = atob(base64);
+            let buffer = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                buffer[i] = binary.charCodeAt(i);
+            }
+            return buffer;
         }
 
         function handleFile(file) {
@@ -62,58 +64,26 @@
             reader.onload = function(event) {
                 try {
                     const result = event.target.result;
-                    const decoded = decodeFile(new Uint8Array(result));
+                    binaryData = new Uint8Array(result); // Guardar os dados binários
 
-                    if (!decoded) {
-                        throw new Error("Falha ao processar o arquivo.");
-                    }
+                    const base64String = arrayBufferToBase64(result);
+                    editor.value = base64String; // Exibir em Base64 para edição
 
-                    const formattedJson = JSON.stringify(JSON.parse(decoded), null, 2);
-                    editor.value = formattedJson;
                     editor.classList.remove("hidden");
-                    downloadDecodificado.classList.remove("hidden");
-                    downloadCodificado.classList.remove("hidden");
+                    downloadDecoded.classList.remove("hidden");
+                    downloadEncoded.classList.remove("hidden");
                     errorMsg.classList.add("hidden");
-
-                    saveToHistory(formattedJson, fileName);
                 } catch (error) {
                     console.error("Erro ao processar o arquivo:", error);
                     errorMsg.classList.remove("hidden");
-                    editor.classList.add("hidden");
-                    downloadDecodificado.classList.add("hidden");
-                    downloadCodificado.classList.add("hidden");
                 }
             };
 
             reader.readAsArrayBuffer(file);
         }
 
-        function saveToHistory(data, name) {
-            let history = JSON.parse(localStorage.getItem("fileHistory")) || [];
-            history.unshift({ name, data, date: new Date().toLocaleString() });
-            localStorage.setItem("fileHistory", JSON.stringify(history));
-            updateHistoryUI();
-        }
-
-        function updateHistoryUI() {
-            historyList.innerHTML = "";
-            const history = JSON.parse(localStorage.getItem("fileHistory")) || [];
-            history.forEach((item, index) => {
-                const li = document.createElement("li");
-                li.textContent = `${item.name} - ${item.date}`;
-                li.onclick = () => {
-                    editor.value = item.data;
-                    fileName = item.name;
-                    editor.classList.remove("hidden");
-                    downloadDecodificado.classList.remove("hidden");
-                    downloadCodificado.classList.remove("hidden");
-                };
-                historyList.appendChild(li);
-            });
-        }
-
-        function downloadFile(content, name) {
-            const blob = new Blob([content], { type: "application/octet-stream" });
+        function downloadFile(content, name, type) {
+            const blob = new Blob([content], { type });
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
             a.download = name;
@@ -143,16 +113,14 @@
             }
         });
 
-        downloadDecodificado.addEventListener("click", () => {
-            downloadFile(editor.value, "plain.txt");
+        downloadDecoded.addEventListener("click", () => {
+            downloadFile(editor.value, "plain.txt", "text/plain");
         });
 
-        downloadCodificado.addEventListener("click", () => {
-            const encoded = encodeFile(editor.value);
-            downloadFile(encoded, "user1.dat");
+        downloadEncoded.addEventListener("click", () => {
+            const encodedBuffer = base64ToArrayBuffer(editor.value);
+            downloadFile(encodedBuffer, "user1.dat", "application/octet-stream");
         });
-
-        updateHistoryUI();
     </script>
 
 </body>
