@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Arquivos DAT</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #drop-zone { border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer; }
+        #editor { width: 100%; height: 200px; margin-top: 10px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h2>Editor de Arquivos DAT</h2>
+    
+    <div id="drop-zone">Arraste um arquivo aqui ou <button onclick="document.getElementById('file-input').click()">Selecione um arquivo</button></div>
+    <input type="file" id="file-input" class="hidden">
+
+    <textarea id="editor" class="hidden"></textarea>
+    
+    <button id="download-decodificado" class="hidden">Baixar como Texto</button>
+    <button id="download-codificado" class="hidden">Baixar como DAT</button>
+
+    <h3>Histórico</h3>
+    <ul id="history-list"></ul>
+
+    <script>
+        const fileInput = document.getElementById("file-input");
+        const dropZone = document.getElementById("drop-zone");
+        const editor = document.getElementById("editor");
+        const downloadDecodificado = document.getElementById("download-decodificado");
+        const downloadCodificado = document.getElementById("download-codificado");
+        const historyList = document.getElementById("history-list");
+
+        let fileName = "";
+
+        function decodeFile(data) {
+            return new TextDecoder().decode(data); // Simula a decodificação
+        }
+
+        function encodeFile(json) {
+            return new TextEncoder().encode(json); // Simula a codificação
+        }
+
+        function handleFile(file) {
+            fileName = file.name;
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                try {
+                    const decoded = decodeFile(event.target.result);
+                    const formattedJson = JSON.stringify(JSON.parse(decoded), null, 2);
+                    editor.value = formattedJson;
+                    editor.classList.remove("hidden");
+                    downloadDecodificado.classList.remove("hidden");
+                    downloadCodificado.classList.remove("hidden");
+
+                    saveToHistory(formattedJson, fileName);
+                } catch (error) {
+                    alert("Erro ao decodificar o arquivo.");
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function saveToHistory(data, name) {
+            let history = JSON.parse(localStorage.getItem("fileHistory")) || [];
+            history.unshift({ name, data, date: new Date().toLocaleString() });
+            localStorage.setItem("fileHistory", JSON.stringify(history));
+            updateHistoryUI();
+        }
+
+        function updateHistoryUI() {
+            historyList.innerHTML = "";
+            const history = JSON.parse(localStorage.getItem("fileHistory")) || [];
+            history.forEach((item, index) => {
+                const li = document.createElement("li");
+                li.textContent = `${item.name} - ${item.date}`;
+                li.onclick = () => {
+                    editor.value = item.data;
+                    fileName = item.name;
+                    editor.classList.remove("hidden");
+                    downloadDecodificado.classList.remove("hidden");
+                    downloadCodificado.classList.remove("hidden");
+                };
+                historyList.appendChild(li);
+            });
+        }
+
+        function downloadFile(content, name) {
+            const blob = new Blob([content], { type: "application/octet-stream" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            a.click();
+        }
+
+        dropZone.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            dropZone.style.backgroundColor = "#f0f8ff";
+        });
+
+        dropZone.addEventListener("dragleave", () => {
+            dropZone.style.backgroundColor = "transparent";
+        });
+
+        dropZone.addEventListener("drop", (event) => {
+            event.preventDefault();
+            dropZone.style.backgroundColor = "transparent";
+            if (event.dataTransfer.files.length > 0) {
+                handleFile(event.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+            }
+        });
+
+        downloadDecodificado.addEventListener("click", () => {
+            downloadFile(editor.value, "plain.txt");
+        });
+
+        downloadCodificado.addEventListener("click", () => {
+            const encoded = encodeFile(editor.value);
+            downloadFile(encoded, "user1.dat");
+        });
+
+        updateHistoryUI();
+    </script>
+
+</body>
+</html>
