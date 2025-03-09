@@ -6,25 +6,33 @@
     <title>Editor de Arquivos DAT</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        #drop-zone { border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer; }
-        #editor { width: 100%; height: 200px; margin-top: 10px; }
+        #drop-zone { border: 2px dashed #007bff; padding: 20px; text-align: center; cursor: pointer; padding: 20px; margin-bottom: 10px; }
+        #editor { width: 100%; height: 200px; margin-top: 10px; display: none; }
+        #history { margin-top: 20px; }
         .hidden { display: none; }
         #error-msg { color: red; }
     </style>
 </head>
 <body>
 
-    <h2>Editor de Arquivos DAT ver.2</h2>
+    <h2>Editor de Arquivos DAT</h2>
 
     <div id="drop-zone">Arraste um arquivo aqui ou <button onclick="document.getElementById('file-input').click()">Selecione um arquivo</button></div>
     <input type="file" id="file-input" class="hidden">
     
     <p id="error-msg" class="hidden">Erro ao carregar o arquivo!</p>
 
-    <textarea id="editor" class="hidden"></textarea>
+    <textarea id="editor"></textarea>
 
     <button id="download-decoded" class="hidden">Baixar como Texto</button>
     <button id="download-encoded" class="hidden">Baixar como DAT</button>
+
+    <h3>Histórico</h3>
+    <ul id="history-list"></ul>
+
+    <script src="base64.js"></script>
+    <script src="functions.js"></script>
+    <script src="history.js"></script>
 
     <script>
         const fileInput = document.getElementById("file-input");
@@ -33,27 +41,10 @@
         const downloadDecoded = document.getElementById("download-decoded");
         const downloadEncoded = document.getElementById("download-encoded");
         const errorMsg = document.getElementById("error-msg");
+        const historyList = document.getElementById("history-list");
 
         let fileName = "";
-        let binaryData = null;
-
-        function arrayBufferToBase64(buffer) {
-            let binary = '';
-            let bytes = new Uint8Array(buffer);
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary);
-        }
-
-        function base64ToArrayBuffer(base64) {
-            let binary = atob(base64);
-            let buffer = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                buffer[i] = binary.charCodeAt(i);
-            }
-            return buffer;
-        }
+        let history = new History();
 
         function handleFile(file) {
             if (!file) return;
@@ -63,23 +54,48 @@
 
             reader.onload = function(event) {
                 try {
-                    const result = event.target.result;
-                    binaryData = new Uint8Array(result); // Guardar os dados binários
+                    const result = new Uint8Array(event.target.result);
+                    const decryptedText = Decode(result); 
 
-                    const base64String = arrayBufferToBase64(result);
-                    editor.value = base64String; // Exibir em Base64 para edição
-
-                    editor.classList.remove("hidden");
+                    const jsonFormatted = JSON.stringify(JSON.parse(decryptedText), null, 2);
+                    editor.value = jsonFormatted;
+                    editor.style.display = "block";
                     downloadDecoded.classList.remove("hidden");
                     downloadEncoded.classList.remove("hidden");
                     errorMsg.classList.add("hidden");
+
+                    const hash = Hash(jsonFormatted);
+                    history.removeFromHistory(hash);
+                    history.addToHistory(jsonFormatted, fileName, hash);
+                    history.syncToLocalStorage();
+                    updateHistoryUI();
                 } catch (error) {
                     console.error("Erro ao processar o arquivo:", error);
                     errorMsg.classList.remove("hidden");
+                    editor.style.display = "none";
+                    downloadDecoded.classList.add("hidden");
+                    downloadEncoded.classList.add("hidden");
                 }
             };
 
             reader.readAsArrayBuffer(file);
+        }
+
+        function updateHistoryUI() {
+            historyList.innerHTML = "";
+            const hist = history.history || [];
+            hist.forEach((item) => {
+                const li = document.createElement("li");
+                li.textContent = `${item.fileName} - ${new Date(item.date).toLocaleString()}`;
+                li.onclick = () => {
+                    editor.value = item.jsonString;
+                    fileName = item.fileName;
+                    editor.style.display = "block";
+                    downloadDecoded.classList.remove("hidden");
+                    downloadEncoded.classList.remove("hidden");
+                };
+                historyList.appendChild(li);
+            });
         }
 
         function downloadFile(content, name, type) {
@@ -118,9 +134,11 @@
         });
 
         downloadEncoded.addEventListener("click", () => {
-            const encodedBuffer = base64ToArrayBuffer(editor.value);
-            downloadFile(encodedBuffer, "user1.dat", "application/octet-stream");
+            const encodedData = Encode(editor.value);
+            downloadFile(encodedData, "user1.dat", "application/octet-stream");
         });
+
+        updateHistoryUI();
     </script>
 
 </body>
